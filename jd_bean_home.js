@@ -42,11 +42,13 @@ if ($.isNode()) {
   cookiesArr.reverse();
   cookiesArr.push(...[$.getdata('CookieJD2'), $.getdata('CookieJD')]);
   cookiesArr.reverse();
+  cookiesArr = cookiesArr.filter(item => item !== "" && item !== null && item !== undefined);
 }
 const JD_API_HOST = 'https://api.m.jd.com/';
 !(async () => {
   $.newShareCodes = []
-  await getAuthorShareCode()
+  // await getAuthorShareCode();
+  // await getAuthorShareCode2();
   if (!cookiesArr[0]) {
     $.msg($.name, '【提示】请先获取京东账号一cookie\n直接使用NobyDa的京东签到获取', 'https://bean.m.jd.com/', {"open-url": "https://bean.m.jd.com/"});
     return;
@@ -66,29 +68,40 @@ const JD_API_HOST = 'https://api.m.jd.com/';
 
         if ($.isNode()) {
           await notify.sendNotify(`${$.name}cookie已失效 - ${$.UserName}`, `京东账号${$.index} ${$.UserName}\n请重新登录获取cookie`);
-        } else {
-          $.setdata('', `CookieJD${i ? i + 1 : ""}`);//cookie失效，故清空cookie。$.setdata('', `CookieJD${i ? i + 1 : "" }`);//cookie失效，故清空cookie。
         }
         continue
       }
       await jdBeanHome();
     }
   }
-    for (let i = 0; i < cookiesArr.length; i++) {
-      if (cookiesArr[i]) {
-        $.UserName = decodeURIComponent(cookie.match(/pt_pin=(.+?);/) && cookie.match(/pt_pin=(.+?);/)[1])
-        console.log(`${$.UserName}去帮助下一个人`)
-        cookie = cookiesArr[i];
-        if ($.newShareCodes.length > 1) {
-          let code = $.newShareCodes[(i + 1) % $.newShareCodes.length]
-          await help(code[0], code[1])
-        }
-        if (helpAuthor && $.authorCode) {
-          console.log(`去帮助作者`)
-          await help($.authorCode[0], $.authorCode[1])
-        }
-      }
-    }
+  // for (let i = 0; i < cookiesArr.length; i++) {
+  //   if (cookiesArr[i]) {
+  //     $.UserName = decodeURIComponent(cookie.match(/pt_pin=(.+?);/) && cookie.match(/pt_pin=(.+?);/)[1])
+  //     console.log(`${$.UserName}去帮助下一个人`)
+  //     cookie = cookiesArr[i];
+  //     if ($.newShareCodes.length > 1) {
+  //       let code = $.newShareCodes[(i + 1) % $.newShareCodes.length]
+  //       await help(code[0], code[1])
+  //     }
+  //     if (helpAuthor && $.authorCode) {
+  //       console.log(`去帮助作者`)
+  //       const helpRes = await help($.authorCode[0], $.authorCode[1])
+  //       if (helpRes && helpRes.data.respCode === 'SG209') {
+  //         console.log(`助力次数已耗尽，跳出助力`)
+  //         break;
+  //       }
+  //     }
+  //     if (helpAuthor && $.authorCode2) {
+  //       for (let code of $.authorCode2) {
+  //         const helpRes = await help(code.shareCode, code.groupCode);
+  //         if (helpRes && helpRes.data.respCode === 'SG209') {
+  //           console.log(`助力次数已耗尽，跳出助力`)
+  //           break;
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
 })()
   .catch((e) => {
     $.log('', `❌ ${$.name}, 失败! 原因: ${e}!`, '')
@@ -98,9 +111,51 @@ const JD_API_HOST = 'https://api.m.jd.com/';
   })
 
 async function jdBeanHome() {
+  $.doneState = false
+  for (let i = 0; i < 3; ++i) {
+    await doTask2()
+    await $.wait(1000)
+    if ($.doneState) break
+  }
+  await $.wait(1000)
+  await award("feeds")
+  await $.wait(1000)
   await getUserInfo()
+  await $.wait(1000)
   await getTaskList()
   await showMsg();
+}
+
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min)) + min;
+}
+function doTask2() {
+    return new Promise(resolve => {
+      const body = {"awardFlag": false, "skuId": `${getRandomInt(10000000,20000000)}`, "source": "feeds", "type": '1'};
+      $.post(taskUrl('beanHomeTask', body), (err, resp, data) => {
+        try {
+          if (err) {
+            console.log(`${JSON.stringify(err)}`)
+            console.log(`${$.name} API请求失败，请检查网路重试`)
+          } else {
+            if (safeGet(data)) {
+              data = JSON.parse(data);
+              if(data.code === '0' && data.data){
+                console.log(`任务完成进度：${data.data.taskProgress} / ${data.data.taskThreshold}`)
+                if(data.data.taskProgress===data.data.taskThreshold)
+                  $.doneState = true
+              }
+            }
+          }
+        } catch (e) {
+          $.logErr(e, resp)
+        } finally {
+          resolve();
+        }
+      })
+    })
 }
 
 function getAuthorShareCode() {
@@ -121,7 +176,26 @@ function getAuthorShareCode() {
     })
   })
 }
-
+function getAuthorShareCode2() {
+  return new Promise(resolve => {
+    $.get({url: "https://gitee.com/lxk0301/updateTeam/raw/master/jd_updateBeanHome.json",headers:{
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1 Edg/87.0.4280.88"
+      }}, async (err, resp, data) => {
+      try {
+        if (err) {
+        } else {
+          if (safeGet(data)) {
+            $.authorCode2 = JSON.parse(data);
+          }
+        }
+      } catch (e) {
+        $.logErr(e, resp)
+      } finally {
+        resolve();
+      }
+    })
+  })
+}
 function getUserInfo() {
   return new Promise(resolve => {
     $.post(taskUrl('signBeanGroupStageIndex', 'body'), async (err, resp, data) => {
@@ -132,18 +206,20 @@ function getUserInfo() {
         } else {
           if (safeGet(data)) {
             data = JSON.parse(data);
-            $.actId = data.data.jklInfo.keyId
-            let {shareCode, groupCode} = data.data
-            if (!shareCode) {
-              console.log(`未获取到助力码，去开团`)
-              await hitGroup()
-            } else {
-              console.log(shareCode, groupCode)
-              // 去做逛会场任务
-              if (data.data.beanActivityVisitVenue.taskStatus === '0') {
-                await help(shareCode, groupCode, 1)
+            if(data.data.jklInfo) {
+              $.actId = data.data.jklInfo.keyId
+              let {shareCode, groupCode} = data.data
+              if (!shareCode) {
+                console.log(`未获取到助力码，去开团`)
+                await hitGroup()
+              } else {
+                console.log(shareCode, groupCode)
+                // 去做逛会场任务
+                if (data.data.beanActivityVisitVenue.taskStatus === '0') {
+                  await help(shareCode, groupCode, 1)
+                }
+                $.newShareCodes.push([shareCode, groupCode])
               }
-              $.newShareCodes.push([shareCode, groupCode])
             }
           }
         }
@@ -219,7 +295,7 @@ function help(shareCode, groupCode, isTask = 0) {
       } catch (e) {
         $.logErr(e, resp)
       } finally {
-        resolve();
+        resolve(data);
       }
     })
   })
@@ -296,9 +372,9 @@ function receiveTask(itemId = "zddd", type = "3") {
 }
 
 
-function award() {
+function award(source="home") {
   return new Promise(resolve => {
-    const body = {"awardFlag": true, "source": "home"};
+    const body = {"awardFlag": true, "source": source};
     $.post(taskUrl('beanHomeTask', body), (err, resp, data) => {
       try {
         if (err) {
@@ -420,7 +496,7 @@ function jsonParse(str) {
       return JSON.parse(str);
     } catch (e) {
       console.log(e);
-      $.msg($.name, '', '不要在BoxJS手动复制粘贴修改cookie')
+      $.msg($.name, '', '请勿随意在BoxJs输入框修改内容\n建议通过脚本去获取cookie')
       return [];
     }
   }
